@@ -1,8 +1,10 @@
+
 import { CalculationConfig, SimulationResult, EntityResult, TaxType, ProductPriceDetail, TradeMode, Region } from '../types';
 
 export const calculateSimulation = (config: CalculationConfig): SimulationResult => {
   const {
     packageItems,
+    includeIncomeTax,
     funder, 
     retailer, 
     
@@ -19,7 +21,7 @@ export const calculateSimulation = (config: CalculationConfig): SimulationResult
     funderIncomeTaxRate,
     funderVatRefundRate = 0,
     funderIncomeTaxRefundRate = 0,
-    funderLogisticsCostPercent = 0, // New field
+    funderLogisticsCostPercent = 0, 
 
     // Cangjing
     cangjingRegion,
@@ -29,7 +31,7 @@ export const calculateSimulation = (config: CalculationConfig): SimulationResult
     cangjingIncomeTaxRate,
     cangjingVatRefundRate = 0,
     cangjingIncomeTaxRefundRate = 0,
-    cangjingLogisticsCostPercent = 0, // New field
+    cangjingLogisticsCostPercent = 0,
 
     // Trader
     hasIntermediary,
@@ -42,6 +44,7 @@ export const calculateSimulation = (config: CalculationConfig): SimulationResult
     // Retailer
     retailerRegion,
     retailerTradeMode,
+    retailerTaxType, 
     retailerMarkupPercent,
     retailerPaymentTermDays,
     retailerVatSurchargeRate,
@@ -95,6 +98,7 @@ export const calculateSimulation = (config: CalculationConfig): SimulationResult
     vatOutput: totalMfgVatOutput,
     vatPayable: totalMfgVatOutput, 
     surcharges: 0,
+    incomeTax: 0,
     taxRefunds: 0,
     financeCost: 0,
     operationalCost: 0,
@@ -141,11 +145,16 @@ export const calculateSimulation = (config: CalculationConfig): SimulationResult
 
   const cmGrossProfit = cmPriceExcl - totalMfgPriceExcl;
   const cmPreTaxProfit = cmGrossProfit - cmSurcharges - cmFinanceCost - cmOperationalCost;
-  const cmIncomeTax = Math.max(0, cmPreTaxProfit * (funderIncomeTaxRate / 100));
-
-  // Refunds
+  
+  // Refunds Calculation (VAT Refund is usually taxable income)
   const cmVatRefund = cmVatPayable * (funderVatRefundRate / 100);
-  const cmIncomeTaxRefund = cmIncomeTax * (funderIncomeTaxRefundRate / 100);
+  
+  // Income Tax (Conditional)
+  // Taxable Base = PreTax Profit + VAT Refunds (Subsidies)
+  const cmTaxableBase = cmPreTaxProfit + cmVatRefund;
+  const cmIncomeTax = includeIncomeTax ? Math.max(0, cmTaxableBase * (funderIncomeTaxRate / 100)) : 0;
+
+  const cmIncomeTaxRefund = includeIncomeTax ? (cmIncomeTax * (funderIncomeTaxRefundRate / 100)) : 0;
   const cmTotalRefunds = cmVatRefund + cmIncomeTaxRefund;
 
   const cmNetProfit = cmPreTaxProfit - cmIncomeTax + cmTotalRefunds;
@@ -167,6 +176,7 @@ export const calculateSimulation = (config: CalculationConfig): SimulationResult
     vatOutput: cmOutputVat,
     vatPayable: cmVatPayable,
     surcharges: cmSurcharges,
+    incomeTax: cmIncomeTax,
     taxRefunds: cmTotalRefunds,
     financeCost: cmFinanceCost,
     operationalCost: cmOperationalCost,
@@ -187,7 +197,6 @@ export const calculateSimulation = (config: CalculationConfig): SimulationResult
 
   if (cangjingTaxType === TaxType.GENERAL) {
     cjCostBase = cmPriceExcl; 
-    // Logic check: Can Funder provide 13% ticket? Yes, assumed General.
     cjInputVat = cmOutputVat; 
   } else {
     // Small Scale cannot deduct input
@@ -202,7 +211,6 @@ export const calculateSimulation = (config: CalculationConfig): SimulationResult
   let cjOutputVat = cjPriceExcl * cjTaxRate;
   let cjPriceIncl = cjPriceExcl * (1 + cjTaxRate);
 
-  // Missing Invoice Detection Logic
   if (cangjingTaxType === TaxType.GENERAL) {
      const effectiveInputRate = cjInputVat / cjCostBase;
      const effectiveOutputRate = cjTaxRate;
@@ -212,21 +220,16 @@ export const calculateSimulation = (config: CalculationConfig): SimulationResult
      }
   }
 
-  // --- COMPLIANCE & OPTIMIZATION TIPS ---
   const downstreamMode = hasIntermediary ? TradeMode.SALES : retailerTradeMode;
-  const paymentDays = hasIntermediary ? (config.traderPaymentTermDays || 0) : retailerPaymentTermDays;
-
+  
   if (downstreamMode === TradeMode.CONSIGNMENT) {
-      cjTips.push("【开票时点】代销模式下，纳税义务发生时间为收到代销清单之日。建议藏境收到渠道方《代销清单》后再开具发票，避免提前垫付税款。");
-      cjTips.push("【收入确认】依据收到的代销清单确认收入，确保与增值税纳税义务时间一致。");
+      cjTips.push("【开票时点】代销模式下，纳税义务发生时间为收到代销清单之日。");
   } else {
-      // Sales / Credit Sales
-      cjTips.push(`【开票时点】赊销模式下，纳税义务发生时间为书面合同约定的付款日期。建议合同明确约定在${paymentDays}天后付款，以递延纳税义务。`);
-      cjTips.push("【风险规避】若合同未约定付款日期，则发货当天即产生纳税义务。务必签署明确的书面合同。");
+      cjTips.push(`【开票时点】赊销模式下，纳税义务发生时间为书面合同约定的付款日期。`);
   }
 
   if (cangjingRegion === Region.TIBET) {
-      cjTips.push("【西藏合规】必须确保“实质性运营”（人员、场所、资产在西藏），妥善留存租金、社保、水电凭证，以保障退税政策安全。");
+      cjTips.push("【西藏合规】必须确保“实质性运营”。");
   }
 
   const cjBreakdown: ProductPriceDetail[] = funderBreakdown.map(item => {
@@ -252,7 +255,6 @@ export const calculateSimulation = (config: CalculationConfig): SimulationResult
   let traderBreakdown: ProductPriceDetail[] = [];
 
   if (hasIntermediary) {
-      // Trader Calculations
       let trInputVat = 0;
       let trCostBase = 0;
       let trWarnings: string[] = [];
@@ -261,32 +263,28 @@ export const calculateSimulation = (config: CalculationConfig): SimulationResult
           trInputVat = cjOutputVat;
           trCostBase = cjPriceExcl;
       } else if (traderTaxType === TaxType.GENERAL && cangjingTaxType === TaxType.SMALL) {
-          // Warning: General Trader buying from Small Cangjing
           trInputVat = cjOutputVat; // 1%
           trCostBase = cjPriceExcl;
           trWarnings.push('⚠️ 进项不足 (上游为小规模)');
       } else {
-          // Trader is Small
           trInputVat = 0;
           trCostBase = cjPriceIncl;
       }
 
-      // Pricing
       const trMarkupRate = traderMarkupPercent / 100;
       const trPriceExcl = trCostBase * (1 + trMarkupRate);
       const trTaxRate = traderTaxType;
       const trOutputVat = trPriceExcl * trTaxRate;
       const trPriceIncl = trPriceExcl * (1 + trTaxRate);
 
-      // Taxes
       const trVatPayable = Math.max(0, trOutputVat - trInputVat);
       const trSurcharges = trVatPayable * (traderVatSurchargeRate / 100);
       const trGrossProfit = trPriceExcl - trCostBase;
       const trPreTaxProfit = trGrossProfit - trSurcharges; 
-      const trIncomeTax = Math.max(0, trPreTaxProfit * (traderIncomeTaxRate / 100));
+      
+      const trIncomeTax = includeIncomeTax ? Math.max(0, trPreTaxProfit * (traderIncomeTaxRate / 100)) : 0;
       const trNetProfit = trPreTaxProfit - trIncomeTax;
 
-      // Breakdown
       traderBreakdown = cjBreakdown.map(item => {
           const prevIncl = item.unitPriceInclTax;
           let uCost = (traderTaxType === TaxType.GENERAL && cangjingTaxType !== TaxType.SMALL) 
@@ -316,7 +314,8 @@ export const calculateSimulation = (config: CalculationConfig): SimulationResult
           vatOutput: trOutputVat,
           vatPayable: trVatPayable,
           surcharges: trSurcharges,
-          taxRefunds: 0, // Trader refunds not implemented in inputs yet
+          incomeTax: trIncomeTax,
+          taxRefunds: 0,
           financeCost: 0,
           operationalCost: 0,
           grossProfit: trGrossProfit,
@@ -328,7 +327,6 @@ export const calculateSimulation = (config: CalculationConfig): SimulationResult
           priceBreakdown: traderBreakdown
       };
 
-      // Set variables for Retailer input
       supplierToRetailerPriceExcl = trPriceExcl;
       supplierToRetailerPriceIncl = trPriceIncl;
       supplierToRetailerOutputVat = trOutputVat;
@@ -349,58 +347,70 @@ export const calculateSimulation = (config: CalculationConfig): SimulationResult
   const dsBreakdown: ProductPriceDetail[] = [];
   let commissionExpense = 0;
 
+  // Cost Base logic
+  let dsCostBase = 0;
+  if (retailerTaxType === TaxType.GENERAL) {
+     if (supplierToRetailerTaxType === TaxType.SMALL) {
+         dsInputVat = supplierToRetailerOutputVat;
+         dsCostBase = supplierToRetailerPriceExcl; 
+     } else {
+         dsInputVat = supplierToRetailerOutputVat;
+         dsCostBase = supplierToRetailerPriceExcl;
+     }
+  } else {
+     dsInputVat = 0;
+     dsCostBase = supplierToRetailerPriceIncl;
+  }
+
   if (retailerTradeMode === TradeMode.CONSIGNMENT) {
-    // Mode: Retailer takes commission on Final Price
-    dsPriceExcl = supplierToRetailerPriceExcl * (1 + dsMarkupRate);
-    dsOutputVat = dsPriceExcl * 0.13; // Consumer VAT
-    dsPriceIncl = dsPriceExcl * 1.13;
+    const retailTaxRate = retailerTaxType; 
+    if (retailerTaxType === TaxType.GENERAL) {
+        dsPriceExcl = dsCostBase * (1 + dsMarkupRate);
+        dsOutputVat = dsPriceExcl * 0.13;
+        dsPriceIncl = dsPriceExcl * 1.13;
+    } else {
+        dsPriceIncl = dsCostBase * (1 + dsMarkupRate);
+        dsPriceExcl = dsPriceIncl / (1 + retailTaxRate);
+        dsOutputVat = dsPriceExcl * retailTaxRate;
+    }
 
     const commissionExcl = dsPriceExcl - supplierToRetailerPriceExcl;
-    const serviceVat = commissionExcl * 0.06;
+    const serviceTaxRate = retailerTaxType === TaxType.GENERAL ? 0.06 : 0.01;
+    const serviceVat = commissionExcl * serviceTaxRate;
 
     dsGrossProfit = commissionExcl;
-    dsInputVat = 0;
-    
+    dsInputVat = 0; 
     dsOutputVat = serviceVat; 
     commissionExpense = commissionExcl;
-    
-    // If Intermediary, Trader bears it.
-    if (hasIntermediary && traderResult) {
-        traderResult.outPriceExclTax = dsPriceExcl;
-        traderResult.outPriceInclTax = dsPriceIncl;
-        const newTrOutputVat = dsPriceExcl * traderTaxType;
-        traderResult.vatOutput = newTrOutputVat;
-        traderResult.vatPayable = Math.max(0, newTrOutputVat - traderResult.vatInput);
-        traderResult.surcharges = traderResult.vatPayable * (traderVatSurchargeRate / 100);
-        traderResult.grossProfit = dsPriceExcl - traderResult.inPriceExclTax;
-        traderResult.operationalCost = commissionExcl; 
-        const newTrPreTax = traderResult.grossProfit - traderResult.surcharges - commissionExcl;
-        traderResult.netProfit = newTrPreTax * (1 - traderIncomeTaxRate/100);
-        traderResult.notes.push('承担代销佣金');
-    }
 
   } else {
-    // Sales Mode
-    dsPriceExcl = supplierToRetailerPriceExcl * (1 + dsMarkupRate);
-    dsOutputVat = dsPriceExcl * 0.13;
-    dsPriceIncl = dsPriceExcl * 1.13;
-    dsInputVat = supplierToRetailerOutputVat;
-
-    // Check Input sufficiency
-    if (supplierToRetailerTaxType < 0.03 && dsOutputVat > 0) {
-        dsWarnings.push('⚠️ 进项不足 (缺票 risk)');
+    const retailTaxRate = retailerTaxType;
+    if (retailerTaxType === TaxType.GENERAL) {
+        dsPriceExcl = dsCostBase * (1 + dsMarkupRate);
+        dsOutputVat = dsPriceExcl * retailTaxRate;
+        dsPriceIncl = dsPriceExcl * (1 + retailTaxRate);
+    } else {
+        const priceIncl = dsCostBase * (1 + dsMarkupRate);
+        dsPriceExcl = priceIncl / (1 + retailTaxRate);
+        dsOutputVat = dsPriceExcl * retailTaxRate;
+        dsPriceIncl = priceIncl;
+    }
+    
+    if (retailerTaxType === TaxType.GENERAL && supplierToRetailerTaxType === TaxType.SMALL) {
+        dsWarnings.push('⚠️ 进项不足 (上游为小规模)');
     }
 
-    dsGrossProfit = dsPriceExcl - supplierToRetailerPriceExcl;
+    dsGrossProfit = dsPriceExcl - (retailerTaxType === TaxType.GENERAL ? dsCostBase : (dsCostBase / (1+retailTaxRate))); 
+    if (retailerTaxType === TaxType.SMALL) {
+         dsGrossProfit = dsPriceExcl - dsCostBase;
+    }
   }
   
-  // MSRP VALIDATION Check
   if (dsPriceIncl > totalPackageMsrp) {
      const diff = dsPriceIncl - totalPackageMsrp;
      dsWarnings.push(`⚠️ 售价高于指导价 (超¥${Math.round(diff)})`);
   }
 
-  // Generate Retailer Breakdown
   supplierBreakdown.forEach(item => {
       const uIncl = item.unitPriceInclTax * (1 + dsMarkupRate); 
       dsBreakdown.push({
@@ -414,7 +424,8 @@ export const calculateSimulation = (config: CalculationConfig): SimulationResult
   const dsVatPayable = Math.max(0, dsOutputVat - dsInputVat);
   const dsSurcharges = dsVatPayable * (retailerVatSurchargeRate / 100);
   const dsPreTaxProfit = dsGrossProfit - dsSurcharges;
-  const dsIncomeTax = Math.max(0, dsPreTaxProfit * (retailerIncomeTaxRate / 100));
+  
+  const dsIncomeTax = includeIncomeTax ? Math.max(0, dsPreTaxProfit * (retailerIncomeTaxRate / 100)) : 0;
   const dsNetProfit = dsPreTaxProfit - dsIncomeTax;
 
   const retailerResult: EntityResult = {
@@ -431,6 +442,7 @@ export const calculateSimulation = (config: CalculationConfig): SimulationResult
     vatOutput: dsOutputVat,
     vatPayable: dsVatPayable,
     surcharges: dsSurcharges,
+    incomeTax: dsIncomeTax,
     taxRefunds: 0,
     financeCost: 0,
     operationalCost: 0,
@@ -440,6 +452,7 @@ export const calculateSimulation = (config: CalculationConfig): SimulationResult
     taxBurdenRate: dsGrossProfit > 0 ? ((dsVatPayable + dsSurcharges + dsIncomeTax) / dsGrossProfit) : 0,
     notes: [
       retailerTradeMode === TradeMode.CONSIGNMENT ? '委托代销 (佣金)' : '经销买卖',
+      retailerTaxType === TaxType.GENERAL ? '一般纳税人' : '小规模'
     ],
     warnings: dsWarnings,
     priceBreakdown: dsBreakdown
@@ -461,31 +474,26 @@ export const calculateSimulation = (config: CalculationConfig): SimulationResult
   const cjVatPayable = Math.max(0, cjFinalOutVat - cjInputVat);
   const cjSurcharges = cjVatPayable * (cangjingVatSurchargeRate / 100);
 
-  // Missing Invoice Check for Consignment Mode:
-  // If Consignment, Cangjing pays output VAT on Retail Price.
-  // If Input is based on Cost Price (and potentially small scale), gap is huge.
-  // Logic already covered by tax rate diff, but let's reinforce.
-  if (retailerTradeMode === TradeMode.CONSIGNMENT && cangjingTaxType === TaxType.GENERAL) {
-      // Input VAT is limited to Procurement Cost. Output VAT is on Retail Price.
-      // This is normal for VAT, but high burden if margins are high.
-  }
-
   const apDays = funderPaymentTermMonths * 30;
   const effectiveARDays = hasIntermediary ? (config.traderPaymentTermDays || 0) : retailerPaymentTermDays;
   const fundingGapDays = Math.max(0, effectiveARDays - apDays);
   const cjFinanceCost = cjPriceIncl * cangjingDailyRate * fundingGapDays;
   
-  // Calculate Logistics Cost for Cangjing
   const cjLogisticsCost = cjPriceExcl * (cangjingLogisticsCostPercent / 100);
   const cjOpCosts = cjPriceExcl * (cangjingOperationalCostPercent / 100) + cjLogisticsCost; 
   
   const cjGrossProfit = cjFinalRev - cjCostBase;
   const cjPreTaxProfit = cjGrossProfit - cjSurcharges - cjFinanceCost - cjOpCosts - cjCommissionExp;
-  const cjIncomeTax = Math.max(0, cjPreTaxProfit * (cangjingIncomeTaxRate / 100));
-
-  // Cangjing Refunds
+  
+  // Calculate VAT Refund FIRST to add to Taxable Income
   const cjVatRefund = cjVatPayable * (cangjingVatRefundRate / 100);
-  const cjIncomeTaxRefund = cjIncomeTax * (cangjingIncomeTaxRefundRate / 100);
+  
+  // Income Tax Calc
+  // Taxable Income includes the VAT Refund as subsidy income
+  const cjTaxableIncome = cjPreTaxProfit + cjVatRefund;
+  const cjIncomeTax = includeIncomeTax ? Math.max(0, cjTaxableIncome * (cangjingIncomeTaxRate / 100)) : 0;
+
+  const cjIncomeTaxRefund = includeIncomeTax ? (cjIncomeTax * (cangjingIncomeTaxRefundRate / 100)) : 0;
   const cjTotalRefunds = cjVatRefund + cjIncomeTaxRefund;
 
   const cjNetProfit = cjPreTaxProfit - cjIncomeTax + cjTotalRefunds;
@@ -512,6 +520,7 @@ export const calculateSimulation = (config: CalculationConfig): SimulationResult
     vatOutput: cjFinalOutVat,
     vatPayable: cjVatPayable,
     surcharges: cjSurcharges,
+    incomeTax: cjIncomeTax,
     taxRefunds: cjTotalRefunds,
     financeCost: cjFinanceCost,
     operationalCost: cjOpCosts + cjCommissionExp, 
@@ -522,7 +531,7 @@ export const calculateSimulation = (config: CalculationConfig): SimulationResult
     isCentralNode: true,
     notes: cjNotes,
     warnings: cjWarnings,
-    complianceTips: cjTips, // Passed generated tips here
+    complianceTips: cjTips, 
     priceBreakdown: cjBreakdown
   };
 

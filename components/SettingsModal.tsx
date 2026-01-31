@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { CalculationConfig, Manufacturer, Funder, Retailer, TaxType } from '../types';
 
@@ -21,7 +22,7 @@ interface Props {
   onAddFunder: (name: string, markup: number, term: number) => void;
   onDeleteFunder: (id: string) => void;
   
-  onAddRetailer: (name: string, markup: number, term: number) => void;
+  onAddRetailer: (name: string, markup: number, term: number, taxType: TaxType) => void;
   onDeleteRetailer: (id: string) => void;
 }
 
@@ -53,6 +54,7 @@ export const SettingsModal: React.FC<Props> = ({
   const [newRetailerName, setNewRetailerName] = useState('');
   const [newRetailerMarkup, setNewRetailerMarkup] = useState<string>('20');
   const [newRetailerTerm, setNewRetailerTerm] = useState<string>('45');
+  const [newRetailerTax, setNewRetailerTax] = useState(TaxType.GENERAL);
 
   if (!isOpen) return null;
 
@@ -83,7 +85,7 @@ export const SettingsModal: React.FC<Props> = ({
 
   const handleAddRetailer = () => {
     if (newRetailerName.trim()) {
-      onAddRetailer(newRetailerName, Number(newRetailerMarkup), Number(newRetailerTerm));
+      onAddRetailer(newRetailerName, Number(newRetailerMarkup), Number(newRetailerTerm), newRetailerTax);
       setNewRetailerName('');
     }
   };
@@ -336,27 +338,43 @@ export const SettingsModal: React.FC<Props> = ({
           {/* --- Tab: Retailers --- */}
           {activeTab === 'retailers' && (
              <div className="space-y-6">
-               <div className="bg-white p-4 rounded shadow-sm flex items-end space-x-2 border border-blue-100">
-                  <div className="flex-1">
-                     <label className="block text-xs font-bold text-gray-500 mb-1">新增渠道名称</label>
-                     <input className="w-full text-sm border-gray-300 rounded" value={newRetailerName} onChange={e => setNewRetailerName(e.target.value)} placeholder="例如：某直播选品" />
+               <div className="bg-white p-4 rounded shadow-sm border border-blue-100">
+                  <div className="flex items-end space-x-2 mb-2">
+                      <div className="flex-1">
+                         <label className="block text-xs font-bold text-gray-500 mb-1">新增渠道名称</label>
+                         <input className="w-full text-sm border-gray-300 rounded" value={newRetailerName} onChange={e => setNewRetailerName(e.target.value)} placeholder="例如：某直播选品" />
+                      </div>
+                      <div className="w-32">
+                         <label className="block text-xs font-bold text-gray-500 mb-1">纳税类型</label>
+                         <select className="w-full text-sm border-gray-300 rounded" value={newRetailerTax} onChange={e => setNewRetailerTax(Number(e.target.value))}>
+                            <option value={TaxType.GENERAL}>一般纳税人</option>
+                            <option value={TaxType.SMALL}>小规模</option>
+                         </select>
+                      </div>
                   </div>
-                  <div className="w-24">
-                     <label className="block text-xs font-bold text-gray-500 mb-1">默认加价%</label>
-                     <input type="number" className="w-full text-sm border-gray-300 rounded" value={newRetailerMarkup} onChange={e => setNewRetailerMarkup(e.target.value)} />
+                  <div className="flex items-end space-x-2">
+                       <div className="w-24">
+                         <label className="block text-xs font-bold text-gray-500 mb-1">默认加价%</label>
+                         <input type="number" className="w-full text-sm border-gray-300 rounded" value={newRetailerMarkup} onChange={e => setNewRetailerMarkup(e.target.value)} />
+                      </div>
+                       <div className="w-24">
+                         <label className="block text-xs font-bold text-gray-500 mb-1">默认回款(天)</label>
+                         <input type="number" className="w-full text-sm border-gray-300 rounded" value={newRetailerTerm} onChange={e => setNewRetailerTerm(e.target.value)} />
+                      </div>
+                      <button onClick={handleAddRetailer} className="flex-1 bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-blue-700 h-[38px]">添加</button>
                   </div>
-                   <div className="w-24">
-                     <label className="block text-xs font-bold text-gray-500 mb-1">默认回款(天)</label>
-                     <input type="number" className="w-full text-sm border-gray-300 rounded" value={newRetailerTerm} onChange={e => setNewRetailerTerm(e.target.value)} />
-                  </div>
-                  <button onClick={handleAddRetailer} className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-blue-700 h-[38px]">添加</button>
                </div>
 
                 <div className="grid grid-cols-1 gap-3">
                   {retailers.map(r => (
                      <div key={r.id} className="bg-white p-3 rounded border border-gray-200 flex justify-between items-center">
                         <div>
-                           <div className="font-bold text-gray-800">{r.name}</div>
+                           <div className="font-bold text-gray-800 flex items-center">
+                              {r.name}
+                              <span className="ml-2 text-[10px] font-normal text-gray-500 bg-gray-100 px-1 rounded border border-gray-200">
+                                {r.defaultTaxType === TaxType.SMALL ? '小规模' : '一般纳税人'}
+                              </span>
+                           </div>
                            <div className="text-xs text-gray-500">默认配置: 加价 {r.defaultMarkupPercent}% | 回款 {r.defaultPaymentTermDays}天</div>
                         </div>
                         <button onClick={() => onDeleteRetailer(r.id)} className="text-red-400 hover:text-red-600 text-sm">删除</button>

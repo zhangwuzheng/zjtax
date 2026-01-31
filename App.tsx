@@ -33,8 +33,8 @@ const initialFunders: Funder[] = [
 ];
 
 const initialRetailers: Retailer[] = [
-  { id: 'r1', name: '德商渠道 (商超)', defaultMarkupPercent: 20, defaultPaymentTermDays: 45 },
-  { id: 'r2', name: '电商直播渠道', defaultMarkupPercent: 35, defaultPaymentTermDays: 15 },
+  { id: 'r1', name: '德商渠道 (商超/一般)', defaultMarkupPercent: 20, defaultPaymentTermDays: 45, defaultTaxType: TaxType.GENERAL },
+  { id: 'r2', name: '电商直播渠道 (小规模)', defaultMarkupPercent: 35, defaultPaymentTermDays: 15, defaultTaxType: TaxType.SMALL },
 ];
 
 const App: React.FC = () => {
@@ -57,6 +57,8 @@ const App: React.FC = () => {
     packageItems: [defaultPackageItem],
     funder: initialFunders[0],
     retailer: initialRetailers[0],
+    
+    includeIncomeTax: false, // Default to FALSE as per previous instruction, now togglable
     
     // Global Settings
     funderInterestRate: 6.0,
@@ -129,7 +131,8 @@ const App: React.FC = () => {
 
     // Retailer
     retailerRegion: Region.MAINLAND,
-    retailerTradeMode: TradeMode.SALES, 
+    retailerTradeMode: TradeMode.SALES,
+    retailerTaxType: initialRetailers[0].defaultTaxType, // Initialize
     retailerMarkupPercent: initialRetailers[0].defaultMarkupPercent,
     retailerPaymentTermDays: initialRetailers[0].defaultPaymentTermDays,
     retailerVatSurchargeRate: 12.0,
@@ -186,12 +189,13 @@ const App: React.FC = () => {
       setFunders(prev => prev.filter(f => f.id !== id));
   };
 
-  const handleAddRetailer = (name: string, markup: number, term: number) => {
+  const handleAddRetailer = (name: string, markup: number, term: number, taxType: TaxType) => {
       const newRetailer: Retailer = { 
           id: `r-${Date.now()}`, 
           name, 
           defaultMarkupPercent: markup, 
-          defaultPaymentTermDays: term 
+          defaultPaymentTermDays: term,
+          defaultTaxType: taxType
       };
       setRetailers(prev => [...prev, newRetailer]);
   };
@@ -236,16 +240,20 @@ const App: React.FC = () => {
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 print:hidden"></div>
         <div className="container mx-auto px-4 py-8 relative z-10">
           <div className="flex flex-col md:flex-row md:items-end justify-between">
-            <div>
-               <h1 className="text-3xl md:text-4xl font-serif font-bold tracking-wide text-tibet-gold mb-2 print:text-tibet-red flex items-center">
-                 <img 
-                    src="https://zangjingtech.oss-cn-chengdu.aliyuncs.com/3.png" 
-                    alt="藏境山水 Logo" 
-                    className="h-16 w-auto mr-4 drop-shadow-md"
-                 />
-                 <span>藏境山水</span>
-               </h1>
-               <h2 className="text-xl md:text-2xl font-light opacity-90 print:text-gray-600 print:text-lg pl-2">交易链路财税计算方案</h2>
+            <div className="flex items-center">
+               <img 
+                  src="https://zangjingtech.oss-cn-chengdu.aliyuncs.com/3.png" 
+                  alt="藏境山水 Logo" 
+                  className="h-14 md:h-16 w-auto mr-4 drop-shadow-md"
+               />
+               <div className="flex flex-col md:flex-row md:items-baseline md:gap-4">
+                 <h1 className="text-3xl md:text-4xl font-serif font-bold tracking-wide text-tibet-gold print:text-tibet-red leading-none">
+                   藏境山水
+                 </h1>
+                 <h2 className="text-lg md:text-xl font-light opacity-90 text-tibet-cream/80 print:text-gray-600 print:text-lg">
+                   交易链路财税计算方案
+                 </h2>
+               </div>
             </div>
             <div className="mt-4 md:mt-0 flex items-center gap-3 print:hidden">
               <button 
@@ -265,6 +273,13 @@ const App: React.FC = () => {
           </div>
         </div>
       </header>
+
+      {/* Income Tax Warning Banner - Conditional Display */}
+      {!config.includeIncomeTax && (
+        <div className="bg-yellow-50 border-b border-yellow-200 text-yellow-800 text-xs py-2 text-center print:hidden">
+           ⚠️ 注意：当前计算模型已按配置<strong>不考虑企业所得税 (Income Tax Excluded)</strong>，净利润结果为税前口径。
+        </div>
+      )}
 
       <main className="container mx-auto px-4 -mt-6 relative z-20 space-y-8 print:mt-0 print:pt-4">
         
@@ -296,11 +311,11 @@ const App: React.FC = () => {
             </div>
            
             <div className={`grid ${gridColsClass} gap-6 print:grid-cols-4 print:gap-4`}>
-              <EntityCard data={results.manufacturer} />
-              <EntityCard data={results.funder} isProfitWarning={results.funder.netProfit < 1} />
-              <EntityCard data={results.cangjing} isProfitWarning={results.cangjing.netProfit < 0} />
-              {results.trader && <EntityCard data={results.trader} />}
-              <EntityCard data={results.retailer} />
+              <EntityCard data={results.manufacturer} showIncomeTax={config.includeIncomeTax} />
+              <EntityCard data={results.funder} isProfitWarning={results.funder.netProfit < 1} showIncomeTax={config.includeIncomeTax} />
+              <EntityCard data={results.cangjing} isProfitWarning={results.cangjing.netProfit < 0} showIncomeTax={config.includeIncomeTax} />
+              {results.trader && <EntityCard data={results.trader} showIncomeTax={config.includeIncomeTax} />}
+              <EntityCard data={results.retailer} showIncomeTax={config.includeIncomeTax} />
             </div>
           </div>
         )}

@@ -25,7 +25,6 @@ export const InputSection: React.FC<Props> = ({ config, manufacturers, funders, 
       const surcharge = region === Region.TIBET ? config.defaultTibetSurcharge : config.defaultMainlandSurcharge;
       const income = region === Region.TIBET ? config.defaultTibetIncomeTax : config.defaultMainlandIncomeTax;
       
-      // Auto-set refunds if Tibet
       const vatRefund = region === Region.TIBET ? (config.defaultTibetVatRefund || 0) : 0;
       const incomeRefund = region === Region.TIBET ? (config.defaultTibetIncomeTaxRefund || 0) : 0;
 
@@ -85,7 +84,6 @@ export const InputSection: React.FC<Props> = ({ config, manufacturers, funders, 
   const totalPackagePrice = config.packageItems.reduce((acc, item) => acc + (item.product.basePrice * item.quantity), 0);
   const totalPackageMsrp = config.packageItems.reduce((acc, item) => acc + (item.product.msrp * item.quantity), 0);
 
-  // Dynamic grid column class
   const gridColsClass = config.hasIntermediary 
     ? "grid-cols-1 md:grid-cols-5" 
     : "grid-cols-1 md:grid-cols-4";
@@ -97,12 +95,32 @@ export const InputSection: React.FC<Props> = ({ config, manufacturers, funders, 
           <span className="bg-tibet-red text-white w-6 h-6 rounded-full flex items-center justify-center mr-2 text-xs">1</span>
           方案配置 (Configuration)
         </h2>
-        <div className="flex items-center space-x-3">
-          <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-            采购成本: ¥{totalPackagePrice.toLocaleString()}
-          </div>
-           <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100">
-            建议零售: ¥{totalPackageMsrp.toLocaleString()}
+        
+        <div className="flex items-center space-x-6">
+            {/* Income Tax Toggle */}
+            <label className="flex items-center cursor-pointer select-none">
+                <div className="relative">
+                    <input 
+                        type="checkbox" 
+                        className="sr-only" 
+                        checked={config.includeIncomeTax}
+                        onChange={(e) => onConfigChange({ includeIncomeTax: e.target.checked })}
+                    />
+                    <div className={`block w-10 h-6 rounded-full transition-colors ${config.includeIncomeTax ? 'bg-indigo-600' : 'bg-gray-300'}`}></div>
+                    <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${config.includeIncomeTax ? 'transform translate-x-4' : ''}`}></div>
+                </div>
+                <div className="ml-2 text-xs font-bold text-gray-600">
+                   计算企业所得税
+                </div>
+            </label>
+        
+          <div className="flex items-center space-x-3 border-l border-gray-200 pl-4">
+              <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                采购成本: ¥{totalPackagePrice.toLocaleString()}
+              </div>
+              <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100">
+                建议零售: ¥{totalPackageMsrp.toLocaleString()}
+              </div>
           </div>
         </div>
       </div>
@@ -239,10 +257,12 @@ export const InputSection: React.FC<Props> = ({ config, manufacturers, funders, 
                     <label className="block text-[9px] text-gray-400">附加税 %</label>
                     <input type="number" className="w-full text-xs border-gray-200 rounded" value={config.funderVatSurchargeRate} onChange={e=>onConfigChange({funderVatSurchargeRate: Number(e.target.value)})}/>
                  </div>
+                 {config.includeIncomeTax && (
                  <div>
                     <label className="block text-[9px] text-gray-400">所得税 %</label>
                     <input type="number" className="w-full text-xs border-gray-200 rounded" value={config.funderIncomeTaxRate} onChange={e=>onConfigChange({funderIncomeTaxRate: Number(e.target.value)})}/>
                  </div>
+                 )}
              </div>
              {config.funderRegion === Region.TIBET && (
                  <div className="grid grid-cols-2 gap-2 bg-orange-50 p-1 rounded border border-orange-100 mt-1">
@@ -250,10 +270,12 @@ export const InputSection: React.FC<Props> = ({ config, manufacturers, funders, 
                         <label className="block text-[8px] text-orange-500 font-bold">增值税返还 %</label>
                         <input type="number" className="w-full text-xs border-orange-200 rounded" value={config.funderVatRefundRate || 0} onChange={e=>onConfigChange({funderVatRefundRate: Number(e.target.value)})}/>
                      </div>
+                     {config.includeIncomeTax && (
                      <div>
                         <label className="block text-[8px] text-orange-500 font-bold">所得税返还 %</label>
                         <input type="number" className="w-full text-xs border-orange-200 rounded" value={config.funderIncomeTaxRefundRate || 0} onChange={e=>onConfigChange({funderIncomeTaxRefundRate: Number(e.target.value)})}/>
                      </div>
+                     )}
                  </div>
              )}
           </div>
@@ -334,10 +356,12 @@ export const InputSection: React.FC<Props> = ({ config, manufacturers, funders, 
                     <label className="block text-[9px] text-gray-400">附加税 %</label>
                     <input type="number" className="w-full text-xs border-gray-200 rounded" value={config.cangjingVatSurchargeRate} onChange={e=>onConfigChange({cangjingVatSurchargeRate: Number(e.target.value)})}/>
                  </div>
+                 {config.includeIncomeTax && (
                  <div>
                     <label className="block text-[9px] text-gray-400">所得税 %</label>
                     <input type="number" className="w-full text-xs border-gray-200 rounded" value={config.cangjingIncomeTaxRate} onChange={e=>onConfigChange({cangjingIncomeTaxRate: Number(e.target.value)})}/>
                  </div>
+                 )}
              </div>
              {config.cangjingRegion === Region.TIBET && (
                  <div className="grid grid-cols-2 gap-2 bg-yellow-50 p-1 rounded border border-yellow-200 mt-1">
@@ -345,10 +369,12 @@ export const InputSection: React.FC<Props> = ({ config, manufacturers, funders, 
                         <label className="block text-[8px] text-yellow-700 font-bold">增值税返还 %</label>
                         <input type="number" className="w-full text-xs border-yellow-100 rounded" value={config.cangjingVatRefundRate || 0} onChange={e=>onConfigChange({cangjingVatRefundRate: Number(e.target.value)})}/>
                      </div>
+                     {config.includeIncomeTax && (
                      <div>
                         <label className="block text-[8px] text-yellow-700 font-bold">所得税返还 %</label>
                         <input type="number" className="w-full text-xs border-yellow-100 rounded" value={config.cangjingIncomeTaxRefundRate || 0} onChange={e=>onConfigChange({cangjingIncomeTaxRefundRate: Number(e.target.value)})}/>
                      </div>
+                     )}
                  </div>
              )}
           </div>
@@ -395,10 +421,12 @@ export const InputSection: React.FC<Props> = ({ config, manufacturers, funders, 
                         <label className="block text-[9px] text-gray-400">附加税 %</label>
                         <input type="number" className="w-full text-xs border-purple-200 rounded" value={config.traderVatSurchargeRate} onChange={e=>onConfigChange({traderVatSurchargeRate: Number(e.target.value)})}/>
                     </div>
-                    <div>
+                     {config.includeIncomeTax && (
+                     <div>
                         <label className="block text-[9px] text-gray-400">所得税 %</label>
                         <input type="number" className="w-full text-xs border-purple-200 rounded" value={config.traderIncomeTaxRate} onChange={e=>onConfigChange({traderIncomeTaxRate: Number(e.target.value)})}/>
-                    </div>
+                     </div>
+                     )}
                 </div>
               </div>
             </div>
@@ -424,11 +452,26 @@ export const InputSection: React.FC<Props> = ({ config, manufacturers, funders, 
               value={config.retailer.id}
               onChange={(e) => {
                 const r = retailers.find(x => x.id === e.target.value);
-                if (r) onConfigChange({ retailer: r, retailerMarkupPercent: r.defaultMarkupPercent, retailerPaymentTermDays: r.defaultPaymentTermDays });
+                if (r) onConfigChange({ 
+                    retailer: r, 
+                    retailerMarkupPercent: r.defaultMarkupPercent, 
+                    retailerPaymentTermDays: r.defaultPaymentTermDays,
+                    retailerTaxType: r.defaultTaxType || TaxType.GENERAL // Default to general if undefined
+                });
               }}
             >
               {retailers.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
             </select>
+            
+            <select 
+                className="w-full text-xs border-blue-300 rounded bg-blue-50 mb-2"
+                value={config.retailerTaxType}
+                onChange={(e) => onConfigChange({ retailerTaxType: Number(e.target.value) })}
+            >
+                <option value={TaxType.GENERAL}>一般纳税人 (13%)</option>
+                <option value={TaxType.SMALL}>小规模 (1%)</option>
+            </select>
+
             <select 
                   className="w-full text-xs border-blue-300 rounded bg-blue-50 mb-2"
                   value={config.retailerTradeMode}
@@ -455,10 +498,12 @@ export const InputSection: React.FC<Props> = ({ config, manufacturers, funders, 
                     <label className="block text-[9px] text-gray-400">附加税 %</label>
                     <input type="number" className="w-full text-xs border-gray-200 rounded" value={config.retailerVatSurchargeRate} onChange={e=>onConfigChange({retailerVatSurchargeRate: Number(e.target.value)})}/>
                  </div>
+                 {config.includeIncomeTax && (
                  <div>
                     <label className="block text-[9px] text-gray-400">所得税 %</label>
                     <input type="number" className="w-full text-xs border-gray-200 rounded" value={config.retailerIncomeTaxRate} onChange={e=>onConfigChange({retailerIncomeTaxRate: Number(e.target.value)})}/>
                  </div>
+                 )}
              </div>
           </div>
         </div>

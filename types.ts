@@ -42,6 +42,7 @@ export interface Retailer {
   name: string;
   defaultMarkupPercent: number;
   defaultPaymentTermDays: number;
+  defaultTaxType: TaxType;
 }
 
 export interface PackageItem {
@@ -83,6 +84,8 @@ export interface TransactionLinkConfig {
 export interface CalculationConfig extends GlobalSettings {
   packageItems: PackageItem[]; 
   
+  includeIncomeTax: boolean; // New Toggle
+  
   funder: Funder;
   retailer: Retailer;
 
@@ -121,7 +124,8 @@ export interface CalculationConfig extends GlobalSettings {
   
   // Retailer Config
   retailerRegion: Region;
-  retailerTradeMode: TradeMode; 
+  retailerTradeMode: TradeMode;
+  retailerTaxType: TaxType; // New field
   retailerMarkupPercent: number;
   retailerPaymentTermDays: number;
   retailerVatSurchargeRate: number;
@@ -149,6 +153,7 @@ export interface EntityResult {
   vatOutput: number;
   vatPayable: number;
   surcharges: number;
+  incomeTax: number; // New Field for explicit Income Tax
   taxRefunds: number; // New field for total tax refunds
   financeCost: number;
   operationalCost: number;

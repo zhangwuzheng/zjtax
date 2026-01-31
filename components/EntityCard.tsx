@@ -1,17 +1,37 @@
-import React from 'react';
-import { EntityResult, Region, TradeMode } from '../types';
+
+import React, { useState } from 'react';
+import { EntityResult, Region, TradeMode, TaxType } from '../types';
 
 interface Props {
   data: EntityResult;
   isProfitWarning?: boolean;
+  showIncomeTax?: boolean;
 }
 
-export const EntityCard: React.FC<Props> = ({ data, isProfitWarning }) => {
+export const EntityCard: React.FC<Props> = ({ data, isProfitWarning, showIncomeTax = false }) => {
+  const [showLogic, setShowLogic] = useState(false);
+  const [showContract, setShowContract] = useState(false); // New state for contract details
+  
   const formatCurrency = (val: number) => 
     new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY' }).format(val);
 
+  const formatNumber = (val: number) => 
+    new Intl.NumberFormat('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val);
+
+  const formatUnit = (val: number) => 
+    new Intl.NumberFormat('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(val);
+
+  // Determine tax rate label for display
+  const getTaxLabel = () => {
+     if (data.notes.some(n => n.includes('一般'))) return '13%';
+     if (data.notes.some(n => n.includes('小规模'))) return '1%';
+     return '';
+  };
+
+  const totalTaxesPaid = data.vatPayable + data.surcharges + data.incomeTax;
+
   return (
-    <div className={`rounded-xl shadow-sm border ${isProfitWarning ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white'} overflow-hidden flex flex-col h-full hover:shadow-md transition-shadow relative`}>
+    <div className={`rounded-xl shadow-sm border ${isProfitWarning ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white'} overflow-hidden flex flex-col h-full hover:shadow-md transition-shadow relative group`}>
       
       {/* Warning Badges */}
       {data.warnings && data.warnings.length > 0 && (
@@ -24,141 +44,197 @@ export const EntityCard: React.FC<Props> = ({ data, isProfitWarning }) => {
           </div>
       )}
 
-      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+      {/* Header */}
+      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 relative">
         <div className="flex justify-between items-start mb-2">
              <div>
                 <h3 className="font-bold text-lg text-gray-800">{data.name}</h3>
-                <p className="text-xs text-gray-500">{data.role}</p>
+                <div className="flex items-center space-x-2">
+                    <p className="text-xs text-gray-500">{data.role}</p>
+                    <span className="text-[9px] bg-gray-200 text-gray-600 px-1 rounded">{getTaxLabel()}</span>
+                </div>
              </div>
              <div className="flex flex-col items-end gap-1 mt-4 md:mt-0">
                  <span className={`text-[9px] px-1.5 py-0.5 rounded border uppercase ${data.region === Region.TIBET ? 'bg-tibet-red text-white border-tibet-red' : 'bg-white text-gray-500 border-gray-300'}`}>
                     {data.region === Region.TIBET ? '西藏主体' : '内地主体'}
                  </span>
-                 {data.tradeMode && (
-                     <span className={`text-[9px] px-1.5 py-0.5 rounded border uppercase ${data.tradeMode === TradeMode.CONSIGNMENT ? 'bg-blue-100 text-blue-800 border-blue-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-                        {data.tradeMode === TradeMode.CONSIGNMENT ? '代销模式' : '经销模式'}
-                     </span>
-                 )}
              </div>
         </div>
-        <div className="flex flex-wrap justify-end gap-1">
-             {data.notes.map((note, idx) => (
-               <span key={idx} className={`text-[9px] px-1.5 py-0.5 rounded ${idx === 0 ? 'bg-gray-200 font-bold' : 'bg-yellow-100 text-yellow-800'}`}>
-                 {note}
-               </span>
-             ))}
-        </div>
       </div>
 
-      <div className="p-4 space-y-4 flex-grow">
+      <div className="p-4 space-y-5 flex-grow">
         
-        {/* Contract Price - Table View */}
-        <div className="bg-blue-50 border border-blue-100 rounded p-2">
-            <div className="text-[10px] text-blue-500 uppercase tracking-wider font-bold mb-1 text-center">
-                {data.tradeMode === TradeMode.CONSIGNMENT ? '结算明细 (佣金制)' : '销售合同明细 (含税)'}
+        {/* Core Financials: Revenue & Cost (Inclusive) */}
+        <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+                <div className="text-[10px] text-gray-500 uppercase font-bold">含税销售收入 (Revenue)</div>
+                <div className="text-lg font-bold text-indigo-900 font-mono leading-none">
+                    {formatNumber(data.outPriceInclTax)}
+                </div>
+                <div className="text-[9px] text-gray-400">
+                    不含税: {formatNumber(data.outPriceExclTax)}
+                </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[10px]">
-                <thead>
-                  <tr className="border-b border-blue-200 text-blue-400">
-                    <th className="text-left py-1 font-normal">商品</th>
-                    <th className="text-right py-1 font-normal">单价</th>
-                    <th className="text-right py-1 font-normal">总价</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.priceBreakdown.map((item, idx) => (
-                    <tr key={idx} className="border-b border-blue-100 last:border-0">
-                      <td className="py-1 text-gray-700 truncate max-w-[80px]">{item.productName} <span className="text-gray-400">x{item.quantity}</span></td>
-                      <td className="py-1 text-right text-gray-600">{item.unitPriceInclTax.toLocaleString('zh-CN', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</td>
-                      <td className="py-1 text-right font-bold text-blue-800">{item.totalPriceInclTax.toLocaleString('zh-CN', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t border-blue-200">
-                     <td colSpan={2} className="py-1 text-right font-bold text-blue-600">合计</td>
-                     <td className="py-1 text-right font-bold text-blue-800">{data.outPriceInclTax.toLocaleString('zh-CN', {style:'currency', currency:'CNY'})}</td>
-                  </tr>
-                </tfoot>
-              </table>
+            <div className="space-y-1 text-right">
+                <div className="text-[10px] text-gray-500 uppercase font-bold">含税采购成本 (Cost)</div>
+                <div className="text-lg font-bold text-gray-600 font-mono leading-none">
+                    {formatNumber(data.inPriceInclTax)}
+                </div>
+                <div className="text-[9px] text-gray-400">
+                    {data.vatInput > 0 ? `进项税: ${formatNumber(data.vatInput)}` : '进项不可抵'}
+                </div>
             </div>
         </div>
 
-        {/* Detailed Price Flow */}
-        <div className="grid grid-cols-2 gap-2 text-sm mt-2">
-          <div className="text-gray-500 text-xs">采购成本 (含税)</div>
-          <div className="text-right font-medium font-mono text-xs">{formatCurrency(data.inPriceInclTax)}</div>
-          
-          <div className="text-gray-500 text-xs">不含税收入 (净额)</div>
-          <div className="text-right font-medium font-mono text-xs">{formatCurrency(data.outPriceExclTax)}</div>
-        </div>
-
-        <div className="h-px bg-gray-100"></div>
-
-        {/* Tax Breakdown */}
-        <div className="space-y-1">
-          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">税负详情 (Tax)</h4>
-          <div className="flex justify-between text-sm">
-            <span>应缴增值税</span>
-            <span className="text-gray-700">{formatCurrency(data.vatPayable)}</span>
-          </div>
-          <div className="flex justify-between text-xs text-gray-400">
-             <span className="pl-2">↳ 进项 Input</span>
-             <span>-{formatCurrency(data.vatInput)}</span>
-          </div>
-           <div className="flex justify-between text-xs text-gray-400">
-             <span className="pl-2">↳ 销项 Output</span>
-             <span>{formatCurrency(data.vatOutput)}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span>附加税</span>
-            <span className="text-gray-700">{formatCurrency(data.surcharges)}</span>
-          </div>
-          {data.taxRefunds > 0 && (
-              <div className="flex justify-between text-sm text-green-600 font-bold border-t border-dashed border-gray-200 pt-1 mt-1">
-                  <span>税收返还 (Refund)</span>
-                  <span>+{formatCurrency(data.taxRefunds)}</span>
-              </div>
-          )}
-        </div>
-
-        <div className="h-px bg-gray-100"></div>
-
-        {/* Cost Analysis */}
-        <div className="space-y-1">
-          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">成本拆解 (Costs)</h4>
-           <div className="flex justify-between text-sm">
-            <span>资金成本</span>
-            <span className={`${data.financeCost > 0 ? 'text-orange-600' : 'text-gray-400'}`}>{formatCurrency(data.financeCost)}</span>
-          </div>
-          {data.operationalCost > 0 && (
-             <div className="flex justify-between text-sm">
-              <span>运营成本</span>
-              <span className="text-orange-600">{formatCurrency(data.operationalCost)}</span>
+        {/* Expenses Summary */}
+        <div className="bg-orange-50/50 rounded-lg p-3 border border-orange-100 flex justify-between items-center text-xs">
+            <div className="text-gray-600">
+                <div className="font-bold">期间费用</div>
+                <div className="scale-90 origin-left text-gray-400">资金+运营</div>
             </div>
-          )}
+            <div className="text-right">
+                <div className="font-bold text-orange-700">-{formatNumber(data.financeCost + data.operationalCost)}</div>
+            </div>
         </div>
+
+        {/* Taxes Summary */}
+        <div className="bg-blue-50/50 rounded-lg p-3 border border-blue-100 flex justify-between items-center text-xs">
+            <div className="text-gray-600">
+                <div className="font-bold">实缴税金</div>
+                <div className="scale-90 origin-left text-gray-400">
+                   {showIncomeTax ? '增值+附加+所得' : '增值+附加'}
+                </div>
+            </div>
+            <div className="text-right">
+                <div className="font-bold text-blue-700">
+                    -{formatNumber(totalTaxesPaid)} 
+                </div>
+                {data.taxRefunds > 0 && <div className="text-[9px] text-green-600">+税收返还: {formatNumber(data.taxRefunds)}</div>}
+            </div>
+        </div>
+
+        {/* New Sales Contract Details Toggle */}
+        <div className="border-t border-dashed border-gray-200 pt-2">
+            <button 
+                onClick={() => setShowContract(!showContract)}
+                className="w-full flex items-center justify-between text-[10px] text-gray-500 hover:text-indigo-600 transition-colors py-1 group"
+            >
+                <span className="font-bold flex items-center gap-1">
+                    📄 销售合同明细 <span className="text-[9px] font-normal bg-gray-100 px-1 rounded text-gray-400 group-hover:text-indigo-500">含税</span>
+                </span>
+                <span className={`transform transition-transform ${showContract ? 'rotate-180' : ''}`}>▼</span>
+            </button>
+
+            {showContract && (
+                <div className="mt-2 bg-slate-50 rounded border border-slate-100 p-2 animate-fade-in shadow-inner">
+                    <div className="flex justify-between text-[8px] text-slate-400 uppercase tracking-wider border-b border-slate-200 pb-1 mb-1.5">
+                        <span>Item Details</span>
+                        <span>Subtotal</span>
+                    </div>
+                    
+                    <div className="space-y-1.5">
+                        {data.priceBreakdown.map((item, i) => (
+                            <div key={i} className="flex justify-between items-start text-[9px] font-mono leading-tight">
+                                <div className="flex flex-col">
+                                    <span className="text-slate-700 font-medium truncate max-w-[120px]">{item.productName}</span>
+                                    <span className="text-[8px] text-slate-400">
+                                        {formatUnit(item.unitPriceInclTax)} × {item.quantity}
+                                    </span>
+                                </div>
+                                <div className="font-bold text-slate-600">
+                                    {formatNumber(item.totalPriceInclTax)}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    <div className="mt-2 pt-1 border-t border-dashed border-slate-300 flex justify-between items-baseline">
+                        <span className="text-[8px] text-slate-500 font-medium">TOTAL (INCL. TAX)</span>
+                        <span className="text-[10px] font-bold text-slate-800 font-mono">{formatNumber(data.outPriceInclTax)}</span>
+                    </div>
+                </div>
+            )}
+        </div>
+        
+        {/* Toggle Logic View */}
+        <button 
+            onClick={() => setShowLogic(!showLogic)}
+            className="w-full text-[10px] text-center text-gray-400 hover:text-indigo-600 pt-2 flex items-center justify-center gap-1 transition-colors mt-auto"
+        >
+            <span>{showLogic ? '收起利润计算逻辑' : '查看利润计算逻辑'}</span>
+            <span className={`transform transition-transform ${showLogic ? 'rotate-180' : ''}`}>▼</span>
+        </button>
+
+        {/* Profit Waterfall Logic (Visible on Toggle) */}
+        {showLogic && (
+            <div className="bg-gray-50 p-2 rounded border border-gray-200 text-[10px] font-mono space-y-1 animate-fade-in">
+                <div className="flex justify-between items-center text-gray-500">
+                    <span>(+) 含税销售收入</span>
+                    <span>{formatNumber(data.outPriceInclTax)}</span>
+                </div>
+                <div className="flex justify-between items-center text-gray-500">
+                    <span>(-) 含税采购成本</span>
+                    <span>{formatNumber(data.inPriceInclTax)}</span>
+                </div>
+                <div className="flex justify-between items-center text-blue-600 font-bold bg-blue-50 px-1 rounded">
+                    <span>(-) 应缴增值税</span>
+                    <span>{formatNumber(data.vatPayable)}</span>
+                </div>
+                <div className="pl-2 text-[9px] text-gray-400 flex justify-between">
+                    <span>↳ 销项税额</span>
+                    <span>{formatNumber(data.vatOutput)}</span>
+                </div>
+                <div className="pl-2 text-[9px] text-gray-400 flex justify-between border-b border-gray-200 pb-1 mb-1">
+                    <span>↳ 进项抵扣</span>
+                    <span>{formatNumber(data.vatInput)}</span>
+                </div>
+
+                <div className="flex justify-between items-center text-gray-500">
+                    <span>(-) 附加税</span>
+                    <span>{formatNumber(data.surcharges)}</span>
+                </div>
+                <div className="flex justify-between items-center text-orange-600">
+                    <span>(-) 资金与运营费</span>
+                    <span>{formatNumber(data.financeCost + data.operationalCost)}</span>
+                </div>
+                
+                {showIncomeTax && (
+                    <div className="flex justify-between items-center text-gray-500">
+                        <span>(-) 企业所得税</span>
+                        <span>{formatNumber(data.incomeTax)}</span>
+                    </div>
+                )}
+
+                {data.taxRefunds > 0 && (
+                    <div className="flex justify-between items-center text-green-600 font-bold">
+                        <span>(+) 税收返还</span>
+                        <span>{formatNumber(data.taxRefunds)}</span>
+                    </div>
+                )}
+                <div className="border-t-2 border-gray-300 pt-1 mt-1 flex justify-between items-center font-bold text-xs text-indigo-900">
+                    <span>(=) 净利润 {showIncomeTax ? '(税后)' : '(税前)'}</span>
+                    <span>{formatNumber(data.netProfit)}</span>
+                </div>
+            </div>
+        )}
+
       </div>
 
-      <div className={`p-4 border-t ${isProfitWarning ? 'bg-red-100' : 'bg-gray-50'}`}>
-        <div className="flex justify-between items-end">
-          <div>
-            <div className="text-xs text-gray-500">毛利 (Gross)</div>
-            <div className="text-sm font-semibold text-gray-700">{formatCurrency(data.grossProfit)}</div>
-          </div>
-          <div className="text-right">
-            <div className="text-xs text-gray-500">净利 (Net Profit)</div>
+      {/* Footer: Net Profit */}
+      <div className={`px-4 py-3 border-t ${isProfitWarning ? 'bg-red-100' : 'bg-gray-100'}`}>
+        <div className="flex justify-between items-center">
+            <div className="flex flex-col">
+                 <div className="text-xs text-gray-500">净利润 (Net Profit)</div>
+                 <div className="text-[9px] text-gray-400 transform scale-90 origin-left">
+                    {showIncomeTax ? '已扣除所得税' : '未扣除所得税'}
+                 </div>
+            </div>
             <div className={`text-xl font-bold ${data.netProfit < 0 ? 'text-red-600' : 'text-green-600'}`}>
               {formatCurrency(data.netProfit)}
             </div>
-          </div>
         </div>
         {data.netProfit < 0 && (
-            <div className="mt-2 text-xs text-red-600 font-bold flex items-center">
-                <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                亏损预警
-            </div>
+            <div className="mt-1 text-[10px] text-red-600 font-bold">⚠️ 亏损预警</div>
         )}
       </div>
     </div>
